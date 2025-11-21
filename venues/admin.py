@@ -1,58 +1,107 @@
 from django.contrib import admin
-from .models import Venue, VenueImage, Package, AvailabilityBlock
+from django.utils.html import format_html
+from .models import Property, PropertyImage, Service, PropertyService, Booking, BookingService
 
-class VenueImageInline(admin.TabularInline):
-    model = VenueImage
+
+class PropertyImageInline(admin.TabularInline):
+    model = PropertyImage
     extra = 1
-    fields = ['image', 'alt_text_tm', 'alt_text_ru', 'order']
+    fields = ['image', 'is_main', 'order', 'image_preview']
+    readonly_fields = ['image_preview']
 
-class PackageInline(admin.TabularInline):
-    model = Package
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" width="100" />', obj.image.url)
+        return "Surat ýok"
+
+    image_preview.short_description = "Surat"
+
+
+class PropertyServiceInline(admin.TabularInline):
+    model = PropertyService
     extra = 1
-    fields = ['name', 'name_tm', 'name_ru', 'price', 'is_active']
+    autocomplete_fields = ['service']
 
-class AvailabilityBlockInline(admin.TabularInline):
-    model = AvailabilityBlock
-    extra = 0
-    fields = ['date', 'is_closed', 'reason_tm', 'reason_ru']
 
-@admin.register(Venue)
-class VenueAdmin(admin.ModelAdmin):
-    list_display = ['name_tm', 'name_ru', 'capacity_min', 'capacity_max', 'base_price', 'status']
-    list_filter = ['status', 'created_at']
-    search_fields = ['name_tm', 'name_ru', 'address_tm', 'address_ru']
-    inlines = [VenueImageInline, PackageInline, AvailabilityBlockInline]
-    
+@admin.register(Property)
+class PropertyAdmin(admin.ModelAdmin):
+    list_display = ['title', 'address', 'price_per_night', 'max_guests',
+                    'bedrooms', 'bathrooms', 'is_available', 'created_at']
+    list_filter = ['is_available', 'bedrooms', 'bathrooms', 'created_at']
+    search_fields = ['title', 'address', 'description']
+    list_editable = ['is_available']
+    inlines = [PropertyImageInline, PropertyServiceInline]
+
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('name_tm', 'name_ru', 'status')
+        ('Esasy maglumat', {
+            'fields': ('title', 'description', 'address')
         }),
-        ('Location', {
-            'fields': ('address_tm', 'address_ru')
+        ('Baha we aýratynlyklar', {
+            'fields': ('price_per_night', 'max_guests', 'bedrooms', 'bathrooms', 'area')
         }),
-        ('Capacity & Pricing', {
-            'fields': ('capacity_min', 'capacity_max', 'base_price')
-        }),
-        ('Description', {
-            'fields': ('description_tm', 'description_ru')
+        ('Status', {
+            'fields': ('is_available',)
         }),
     )
 
-@admin.register(VenueImage)
-class VenueImageAdmin(admin.ModelAdmin):
-    list_display = ['venue', 'order', 'created_at']
-    list_filter = ['venue', 'created_at']
-    ordering = ['venue', 'order']
 
-@admin.register(Package)
-class PackageAdmin(admin.ModelAdmin):
-    list_display = ['venue', 'name', 'name_tm', 'price', 'is_active']
-    list_filter = ['name', 'is_active', 'venue']
-    search_fields = ['venue__name_tm', 'name_tm', 'name_ru']
+@admin.register(Service)
+class ServiceAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'icon', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    list_editable = ['is_active']
 
-@admin.register(AvailabilityBlock)
-class AvailabilityBlockAdmin(admin.ModelAdmin):
-    list_display = ['venue', 'date', 'is_closed']
-    list_filter = ['is_closed', 'date', 'venue']
-    date_hierarchy = 'date'
-    search_fields = ['venue__name_tm']
+
+class BookingServiceInline(admin.TabularInline):
+    model = BookingService
+    extra = 0
+    readonly_fields = ['service', 'quantity', 'price']
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Booking)
+class BookingAdmin(admin.ModelAdmin):
+    list_display = ['property', 'customer_name', 'customer_phone',
+                    'check_in', 'check_out', 'guests_count',
+                    'total_price', 'status', 'created_at']
+    list_filter = ['status', 'check_in', 'check_out', 'created_at']
+    search_fields = ['customer_name', 'customer_phone', 'customer_email',
+                     'property__title']
+    list_editable = ['status']
+    date_hierarchy = 'check_in'
+    inlines = [BookingServiceInline]
+
+    fieldsets = (
+        ('Jaý maglumaty', {
+            'fields': ('property',)
+        }),
+        ('Müşderi maglumaty', {
+            'fields': ('customer_name', 'customer_phone', 'customer_email')
+        }),
+        ('Bron maglumaty', {
+            'fields': ('check_in', 'check_out', 'guests_count', 'total_price')
+        }),
+        ('Status we bellikler', {
+            'fields': ('status', 'notes')
+        }),
+    )
+
+    readonly_fields = ['created_at', 'updated_at']
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # Editing existing booking
+            return self.readonly_fields + ['property', 'check_in', 'check_out',
+                                           'customer_name', 'customer_phone',
+                                           'customer_email', 'guests_count',
+                                           'total_price']
+        return self.readonly_fields
+
+
+# Admin site customization
+admin.site.site_header = "Palatka Ulgamy"
+admin.site.site_title = "Admin Panel"
+admin.site.index_title = "Dolandyryş Paneli"

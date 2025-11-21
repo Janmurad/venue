@@ -1,111 +1,170 @@
 from rest_framework import serializers
-from .models import Venue, VenueImage, Package, AvailabilityBlock
-from datetime import date, timedelta
+from .models import Property, PropertyImage, Service, PropertyService, Booking, BookingService
+from datetime import date
 
-class VenueImageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VenueImage
-        fields = ['id', 'image', 'alt_text_tm', 'alt_text_ru', 'order']
 
-class PackageSerializer(serializers.ModelSerializer):
+class PropertyImageSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Package
+        model = PropertyImage
+        fields = ['id', 'image', 'is_main', 'order']
+
+
+class ServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Service
+        fields = ['id', 'name', 'description', 'icon']
+
+
+class PropertyServiceSerializer(serializers.ModelSerializer):
+    service = ServiceSerializer(read_only=True)
+
+    class Meta:
+        model = PropertyService
+        fields = ['id', 'service', 'price', 'is_included']
+
+
+class PropertyListSerializer(serializers.ModelSerializer):
+    """Jaýlaryň sanawy üçin - ýönekeý maglumat"""
+    main_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Property
         fields = [
-            'id', 'name', 'name_tm', 'name_ru', 
-            'price', 'details_tm', 'details_ru'
+            'id', 'title', 'address', 'price_per_night',
+            'max_guests', 'bedrooms', 'bathrooms', 'area',
+            'main_image', 'is_available'
         ]
 
-class AvailabilitySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AvailabilityBlock
-        fields = ['date', 'is_closed', 'reason_tm', 'reason_ru']
-
-class VenueListSerializer(serializers.ModelSerializer):
-    image_url = serializers.SerializerMethodField()
-    price_range = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Venue
-        fields = [
-            'id', 'name_tm', 'name_ru', 'address_tm', 'address_ru',
-            'capacity_min', 'capacity_max', 'base_price', 'price_range',
-            'image_url'
-        ]
-    
-    def get_image_url(self, obj):
-        first_image = obj.images.first()
-        if first_image:
+    def get_main_image(self, obj):
+        main_img = obj.images.filter(is_main=True).first()
+        if main_img:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(first_image.image.url)
+                return request.build_absolute_uri(main_img.image.url)
         return None
-    
-    def get_price_range(self, obj):
-        packages = obj.packages.filter(is_active=True)
-        if packages.exists():
-            min_price = min(pkg.price for pkg in packages)
-            max_price = max(pkg.price for pkg in packages)
-            return {
-                'min': float(min_price),
-                'max': float(max_price)
-            }
-        return {
-            'min': float(obj.base_price),
-            'max': float(obj.base_price)
-        }
 
-class VenueDetailSerializer(serializers.ModelSerializer):
-    images = VenueImageSerializer(many=True, read_only=True)
-    packages = PackageSerializer(many=True, read_only=True)
-    availability_calendar = serializers.SerializerMethodField()
-    price_range = serializers.SerializerMethodField()
-    
+
+class PropertyDetailSerializer(serializers.ModelSerializer):
+    """Jaýyň doly maglumaty üçin"""
+    images = PropertyImageSerializer(many=True, read_only=True)
+    property_services = PropertyServiceSerializer(many=True, read_only=True)
+    available_services = serializers.SerializerMethodField()
+
     class Meta:
-        model = Venue
+        model = Property
         fields = [
-            'id', 'name_tm', 'name_ru', 'address_tm', 'address_ru',
-            'capacity_min', 'capacity_max', 'base_price', 'price_range',
-            'description_tm', 'description_ru', 'status',
-            'images', 'packages', 'availability_calendar'
+            'id', 'title', 'description', 'address',
+            'price_per_night', 'max_guests', 'bedrooms',
+            'bathrooms', 'area', 'is_available',
+            'images', 'property_services', 'available_services',
+            'created_at', 'updated_at'
         ]
-    
-    def get_availability_calendar(self, obj):
-        # Return availability for next 12 months
-        today = date.today()
-        end_date = today + timedelta(days=365)
-        
-        # Get all blocked dates
-        blocked_dates = set(
-            obj.availability_blocks.filter(
-                date__gte=today,
-                date__lte=end_date,
-                is_closed=True
-            ).values_list('date', flat=True)
+
+    def get_available_services(self, obj):
+        """Saýlanyp bilinjek goşmaça hyzmatlar"""
+        services = obj.property_services.filter(
+            service__is_active=True,
+            is_included=False
         )
-        
-        # Generate calendar
-        calendar = []
-        current_date = today
-        
-        while current_date <= end_date:
-            calendar.append({
-                'date': current_date.isoformat(),
-                'is_available': current_date not in blocked_dates
-            })
-            current_date += timedelta(days=1)
-        
-        return calendar
-    
-    def get_price_range(self, obj):
-        packages = obj.packages.filter(is_active=True)
-        if packages.exists():
-            min_price = min(pkg.price for pkg in packages)
-            max_price = max(pkg.price for pkg in packages)
-            return {
-                'min': float(min_price),
-                'max': float(max_price)
-            }
-        return {
-            'min': float(obj.base_price),
-            'max': float(obj.base_price)
-        }
+        return PropertyServiceSerializer(services, many=True).data
+
+
+class BookingServiceSerializer(serializers.ModelSerializer):
+    service_name = serializers.CharField(source='service.name', read_only=True)
+
+    class Meta:
+        model = BookingService
+        fields = ['id', 'service', 'service_name', 'quantity', 'price']
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    booking_services = BookingServiceSerializer(many=True, read_only=True)
+    property_title = serializers.CharField(source='property.title', read_only=True)
+    services_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False
+    )
+
+    class Meta:
+        model = Booking
+        fields = [
+            'id', 'property', 'property_title', 'customer_name',
+            'customer_phone', 'customer_email', 'check_in',
+            'check_out', 'guests_count', 'total_price',
+            'status', 'notes', 'booking_services', 'services_data',
+            'created_at'
+        ]
+        read_only_fields = ['status', 'created_at']
+
+    def validate(self, data):
+        """Bron maglumatlary barlamak"""
+        check_in = data.get('check_in')
+        check_out = data.get('check_out')
+        property_obj = data.get('property')
+        guests_count = data.get('guests_count')
+
+        # Seneleri barla
+        if check_in and check_out:
+            if check_in < date.today():
+                raise serializers.ValidationError(
+                    "Giriş senesi geçmişde bolup bilmez"
+                )
+            if check_out <= check_in:
+                raise serializers.ValidationError(
+                    "Çykyş senesi giriş senesinden soň bolmaly"
+                )
+
+        # Myhmanlaryň sanyny barla
+        if property_obj and guests_count:
+            if guests_count > property_obj.max_guests:
+                raise serializers.ValidationError(
+                    f"Bu jaýda iň köp {property_obj.max_guests} myhmana ýer bar"
+                )
+
+        # Şol senelerde başga bron barmy barla
+        if property_obj and check_in and check_out:
+            overlapping = Booking.objects.filter(
+                property=property_obj,
+                status__in=['pending', 'confirmed'],
+                check_in__lt=check_out,
+                check_out__gt=check_in
+            )
+            if self.instance:
+                overlapping = overlapping.exclude(pk=self.instance.pk)
+
+            if overlapping.exists():
+                raise serializers.ValidationError(
+                    "Bu senelerde jaý eýýäm bronlanan"
+                )
+
+        return data
+
+    def create(self, validated_data):
+        services_data = validated_data.pop('services_data', [])
+        booking = Booking.objects.create(**validated_data)
+
+        # Goşmaça hyzmatları goş
+        for service_item in services_data:
+            BookingService.objects.create(
+                booking=booking,
+                service_id=service_item['service_id'],
+                quantity=service_item.get('quantity', 1),
+                price=service_item['price']
+            )
+
+        return booking
+
+
+class AvailabilitySerializer(serializers.Serializer):
+    """Elýeterlilik barlamak üçin"""
+    property_id = serializers.IntegerField()
+    check_in = serializers.DateField()
+    check_out = serializers.DateField()
+
+    def validate(self, data):
+        if data['check_out'] <= data['check_in']:
+            raise serializers.ValidationError(
+                "Çykyş senesi giriş senesinden soň bolmaly"
+            )
+        return data
