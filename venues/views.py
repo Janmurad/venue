@@ -1,26 +1,44 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from datetime import datetime
-from .models import Property, Service, Booking
+from .models import Property, Service, Booking, Category
 from .serializers import (
-    PropertyListSerializer, PropertyDetailSerializer,
-    ServiceSerializer, BookingSerializer, AvailabilitySerializer
+    PropertyListSerializer, PropertyDetailSerializer, PropertyCreateSerializer,
+    ServiceSerializer, BookingSerializer, CategorySerializer
 )
 
 
-class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
+class CustomPageNumberPagination(PageNumberPagination):
+    """
+    Kustom pagination klasy.
+    URL görnüşi: /properties/?page=1&page_size=10
+    """
+    page_size_query_param = 'size'
+    max_page_size = 100
+    page_size = 10
+
+
+class PropertyViewSet(viewsets.ModelViewSet):
     """Jaýlar API - diňe okamak üçin (admin panel arkaly goşulýar)"""
     queryset = Property.objects.filter(is_available=True)
+    pagination_class = CustomPageNumberPagination
 
     def get_serializer_class(self):
+        if self.action == 'create':
+            return PropertyCreateSerializer
         if self.action == 'retrieve':
             return PropertyDetailSerializer
         return PropertyListSerializer
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        category_id = self.request.query_params.get('category_id', None)
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
 
         # Gözleg
         search = self.request.query_params.get('search', None)
@@ -108,6 +126,13 @@ class PropertyViewSet(viewsets.ReadOnlyModelViewSet):
         ]
 
         return Response({'booked_dates': booked_ranges})
+
+
+class CategoryViewSet(viewsets.ModelViewSet):
+    """Kategoriýalar API - Goşmak, üýtgetmek we okamak üçin"""
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    pagination_class = CustomPageNumberPagination
 
 
 class ServiceViewSet(viewsets.ReadOnlyModelViewSet):

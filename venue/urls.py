@@ -3,11 +3,12 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from venues.views import PropertyViewSet, ServiceViewSet, BookingViewSet, StatsViewSet
+from venues.views import PropertyViewSet, ServiceViewSet, BookingViewSet, StatsViewSet, CategoryViewSet
 
 # API Router
 router = DefaultRouter()
 router.register(r'properties', PropertyViewSet, basename='property')
+router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'services', ServiceViewSet, basename='service')
 router.register(r'bookings', BookingViewSet, basename='booking')
 router.register(r'stats', StatsViewSet, basename='stats')

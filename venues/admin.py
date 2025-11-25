@@ -25,9 +25,8 @@ class PropertyServiceInline(admin.TabularInline):
 
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
-    list_display = ['title', 'address', 'price_per_night', 'max_guests',
-                    'bedrooms', 'bathrooms', 'is_available', 'created_at']
-    list_filter = ['is_available', 'bedrooms', 'bathrooms', 'created_at']
+    list_display = ['title', 'address', 'price_per_night', 'max_guests', 'is_available', 'created_at']
+    list_filter = ['is_available', 'created_at']
     search_fields = ['title', 'address', 'description']
     list_editable = ['is_available']
     inlines = [PropertyImageInline, PropertyServiceInline]

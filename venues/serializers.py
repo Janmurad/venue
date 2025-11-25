@@ -1,12 +1,78 @@
 from rest_framework import serializers
-from .models import Property, PropertyImage, Service, PropertyService, Booking, BookingService
+from .models import Property, PropertyImage, Service, PropertyService, Booking, BookingService, Category
 from datetime import date
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    """Kategoriýa maglumatlary üçin"""
+
+    class Meta:
+        model = Category
+        # 'description' we 'slug' goşdum, sebäbi olar modelde bar
+        fields = ['id', 'name', 'slug', 'description', 'icon']
+
+    def to_representation(self, instance):
+        """Çykyşda 'icon' üçin doly URL berýär (Kotlin data class üçin)"""
+        representation = super().to_representation(instance)
+
+        # Icon meýdanyny doly URL bilen çalyş
+        if instance.icon and hasattr(instance.icon, 'url'):
+            request = self.context.get('request')
+            if request:
+                representation['icon'] = request.build_absolute_uri(instance.icon.url)
+            else:
+                # Request bolmasa (mysal üçin testde) diňe faýl ýoluny görkez
+                representation['icon'] = instance.icon.url
+        elif 'icon' in representation:
+            # Eger ikonka ýok bolsa, null gaýdýar
+            representation['icon'] = None
+
+        return representation
 
 
 class PropertyImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = PropertyImage
         fields = ['id', 'image', 'is_main', 'order']
+
+
+class PropertyImageUploadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PropertyImage
+        # Ensure 'property' field is excluded or set as read_only if you pass it in create()
+        fields = ['image', 'is_main', 'order']
+
+
+class PropertyCreateSerializer(serializers.ModelSerializer):
+    """Jaý we oňa degişli suratlary döretmek üçin serializer"""
+
+    # Use the writeable image serializer for nested input (many=True)
+    images = PropertyImageUploadSerializer(many=True, required=False)
+
+    class Meta:
+        model = Property
+        fields = [
+            'title', 'description', 'address', 'category',
+            'price_per_night', 'max_guests', 'area', 'images'  # Include 'images' field
+        ]
+        # It's crucial to NOT set 'images' as read_only here.
+
+    def create(self, validated_data):
+        """Property we PropertyImage obýektlerini döredýär"""
+        # 1. Image datany aýyr
+        images_data = validated_data.pop('images', [])
+
+        # 2. Property obýektini döret
+        property_obj = Property.objects.create(**validated_data)
+
+        # 3. Her bir surat üçin PropertyImage obýektini döret
+        for image_data in images_data:
+            PropertyImage.objects.create(
+                property=property_obj,
+                **image_data
+            )
+
+        return property_obj
 
 
 class ServiceSerializer(serializers.ModelSerializer):
@@ -26,13 +92,13 @@ class PropertyServiceSerializer(serializers.ModelSerializer):
 class PropertyListSerializer(serializers.ModelSerializer):
     """Jaýlaryň sanawy üçin - ýönekeý maglumat"""
     main_image = serializers.SerializerMethodField()
+    category = CategorySerializer(read_only=True)
 
     class Meta:
         model = Property
         fields = [
-            'id', 'title', 'address', 'price_per_night',
-            'max_guests', 'bedrooms', 'bathrooms', 'area',
-            'main_image', 'is_available'
+            'id', 'title', 'address', 'price_per_night', 'category',
+            'max_guests', 'area', 'main_image', 'is_available'
         ]
 
     def get_main_image(self, obj):
@@ -49,15 +115,15 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
     images = PropertyImageSerializer(many=True, read_only=True)
     property_services = PropertyServiceSerializer(many=True, read_only=True)
     available_services = serializers.SerializerMethodField()
+    category = CategorySerializer(read_only=True)
 
     class Meta:
         model = Property
         fields = [
             'id', 'title', 'description', 'address',
-            'price_per_night', 'max_guests', 'bedrooms',
-            'bathrooms', 'area', 'is_available',
+            'price_per_night', 'max_guests', 'area', 'is_available',
             'images', 'property_services', 'available_services',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'category'
         ]
 
     def get_available_services(self, obj):

@@ -1,9 +1,81 @@
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator
+import uuid
+from datetime import date
+import os
+
+
+def property_image_path(instance, filename):
+    """
+    Generates file path for uploaded property images:
+    images/properties/<year>/<month>/<day>/<uuid>.<ext>
+    """
+    ext = filename.split('.')[-1]
+    unique_name = f'{uuid.uuid4()}.{ext}'
+    today = date.today()
+
+    return os.path.join(
+        'images',
+        'properties',
+        str(today.year),
+        str(today.month).zfill(2),  # Use zfill to ensure two digits (e.g., 01)
+        str(today.day).zfill(2),  # Use zfill to ensure two digits (e.g., 05)
+        unique_name
+    )
+
+
+def category_icon_path(instance, filename):
+    """
+    Kategoriýa ikonkalary üçin faýl ýoluny döredýär:
+    images/categories/<year>/<month>/<day>/<uuid>.<ext>
+    """
+    ext = filename.split('.')[-1]
+    unique_name = f'{uuid.uuid4()}.{ext}'
+    today = date.today()
+
+    return os.path.join(
+        'images',
+        'categories',
+        str(today.year),
+        str(today.month).zfill(2),
+        str(today.day).zfill(2),
+        unique_name
+    )
+
+
+class Category(models.Model):
+    """Jaý Kategoriýasy modeli"""
+    name = models.CharField(max_length=100, unique=True, verbose_name="Ady")
+    slug = models.SlugField(max_length=100, unique=True, verbose_name="Slug")
+    description = models.TextField(blank=True, verbose_name="Düşündiriş")
+
+    # CHARFIELD ýerine IMAGEFIELD hökmünde üýtgedildi
+    icon = models.ImageField(
+        upload_to=category_icon_path,  # Kustom faýl ýoly
+        blank=True,
+        null=True,  # Surat hökmünde goşulmazlygy mümkin
+        verbose_name="Ikonka suraty"
+    )
+
+    class Meta:
+        verbose_name = "Kategoriýa"
+        verbose_name_plural = "Kategoriýalar"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
 
 
 class Property(models.Model):
     """Jaý/Otag modeli"""
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,  # Kategoriýa ýatyrylsa, jaý NULL bolýar
+        related_name='properties',
+        null=True,
+        blank=True,
+        verbose_name="Kategoriýa"
+    )
     title = models.CharField(max_length=255, verbose_name="Ady")
     description = models.TextField(verbose_name="Düşündiriş")
     address = models.CharField(max_length=500, verbose_name="Salgy")
@@ -15,14 +87,6 @@ class Property(models.Model):
     max_guests = models.IntegerField(
         validators=[MinValueValidator(1)],
         verbose_name="Iň köp myhmanlaryň sany"
-    )
-    bedrooms = models.IntegerField(
-        validators=[MinValueValidator(0)],
-        verbose_name="Ýatylýan otaglar"
-    )
-    bathrooms = models.IntegerField(
-        validators=[MinValueValidator(0)],
-        verbose_name="Hammamlar"
     )
     area = models.IntegerField(
         validators=[MinValueValidator(1)],
@@ -54,7 +118,7 @@ class PropertyImage(models.Model):
         on_delete=models.CASCADE
     )
     image = models.ImageField(
-        upload_to='properties/',
+        upload_to=property_image_path,
         verbose_name="Surat"
     )
     is_main = models.BooleanField(
