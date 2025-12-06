@@ -36,7 +36,7 @@ class PropertyAdmin(admin.ModelAdmin):
             'fields': ('title', 'description', 'address')
         }),
         ('Baha we aýratynlyklar', {
-            'fields': ('price_per_night', 'max_guests', 'bedrooms', 'bathrooms', 'area')
+            'fields': ('price_per_night', 'max_guests', 'area')
         }),
         ('Status', {
             'fields': ('is_available',)
