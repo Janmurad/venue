@@ -40,6 +40,27 @@ class PropertyViewSet(viewsets.ModelViewSet):
         if category_id:
             queryset = queryset.filter(category_id=category_id)
 
+            # Bron seneleri boýunça filter
+            check_in = self.request.query_params.get('check_in', None)
+            check_out = self.request.query_params.get('check_out', None)
+
+            if check_in and check_out:
+                try:
+                    check_in_date = datetime.strptime(check_in, '%Y-%m-%d').date()
+                    check_out_date = datetime.strptime(check_out, '%Y-%m-%d').date()
+
+                    # Şu senelerde bronlanan jaýlary tap
+                    overlapping_bookings = Booking.objects.filter(
+                        status__in=['pending', 'confirmed'],
+                        check_in__lt=check_out_date,  # Bron başlangyç senesi soňra check_out-dan
+                        check_out__gt=check_in_date  # Bron gutarýan senesi öň check_in-dan
+                    ).values_list('property_id', flat=True)
+
+                    # Bronlanan jaýlary aýyr
+                    queryset = queryset.exclude(id__in=overlapping_bookings)
+                except ValueError:
+                    pass  # Sene formaty nädogry bolsa, skip et
+
         # Gözleg
         search = self.request.query_params.get('search', None)
         if search:
