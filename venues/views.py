@@ -51,7 +51,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
 
                     # Şu senelerde bronlanan jaýlary tap
                     overlapping_bookings = Booking.objects.filter(
-                        status__in=['pending', 'confirmed'],
+                        status__in=['confirmed'],
                         check_in__lt=check_out_date,  # Bron başlangyç senesi soňra check_out-dan
                         check_out__gt=check_in_date  # Bron gutarýan senesi öň check_in-dan
                     ).values_list('property_id', flat=True)
