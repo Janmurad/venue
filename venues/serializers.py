@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import Property, PropertyImage, Service, PropertyService, Booking, BookingService, Category
+from catering.models import WeddingMenu
+from catering.serializers import WeddingMenuSerializer
 from datetime import date
 
 
@@ -144,6 +146,7 @@ class BookingServiceSerializer(serializers.ModelSerializer):
 
 
 class BookingSerializer(serializers.ModelSerializer):
+
     booking_services = BookingServiceSerializer(many=True, read_only=True)
     property_title = serializers.CharField(source='property.title', read_only=True)
     services_data = serializers.ListField(
@@ -151,6 +154,12 @@ class BookingSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    catering_menu = serializers.PrimaryKeyRelatedField(
+        queryset=WeddingMenu.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    catering_menu_detail = WeddingMenuSerializer(source='catering_menu', read_only=True)
 
     class Meta:
         model = Booking
@@ -159,9 +168,9 @@ class BookingSerializer(serializers.ModelSerializer):
             'customer_phone', 'customer_email', 'check_in',
             'check_out', 'guests_count', 'total_price',
             'status', 'notes', 'booking_services', 'services_data',
-            'created_at'
+            'catering_menu', 'catering_menu_detail', 'created_at'
         ]
-        read_only_fields = ['status', 'created_at']
+        read_only_fields = ['status', 'created_at', 'catering_menu_detail']
 
     def validate(self, data):
         """Bron maglumatlary barlamak"""

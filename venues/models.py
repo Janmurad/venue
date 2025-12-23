@@ -248,6 +248,14 @@ class Booking(models.Model):
         blank=True,
         verbose_name="Bellikler"
     )
+    catering_menu = models.ForeignKey(
+        'catering.WeddingMenu',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='bookings',
+        verbose_name='Saýlanan toý menýusy'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
