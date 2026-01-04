@@ -170,6 +170,14 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
+        ids = self.request.query_params.get('ids', None)
+        if ids:
+            try:
+                id_list = [int(id.strip()) for id in ids.split(',') if id.strip()]
+                queryset = queryset.filter(id__in=id_list)
+            except (ValueError, TypeError):
+                pass  # Invalid format, skip filter
+
         # Telefon belgisi boýunça gözleg (myhmanyň öz bronlaryny görmegi üçin)
         phone = self.request.query_params.get('phone', None)
         if phone:
